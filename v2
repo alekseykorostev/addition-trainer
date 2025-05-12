@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Тренажер сложения v2</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 30px;
+      background-color: #f9f9f9;
+    }
+    #question {
+      font-size: 36px;
+      margin: 20px 0;
+    }
+    #counter {
+      font-size: 16px;
+      color: gray;
+      display: inline-block;
+    }
+    #result {
+      margin: 10px 0;
+      font-weight: bold;
+    }
+    #timer {
+      font-size: 24px;
+      color: #888;
+      display: inline-block;
+      margin-left: 10px;
+    }
+    #timer:before {
+      content: '⏱️';
+      margin-right: 5px;
+    }
+    input[type="number"], input[type="text"] {
+      font-size: 24px;
+      padding: 8px;
+      width: 120px;
+      text-align: center;
+      margin-right: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+    button {
+      font-size: 18px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+    }
+    .green {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .icon-button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 24px;
+      vertical-align: middle;
+    }
+    #startScreen, #trainer, #finalScreen {
+      display: none;
+    }
+    #resultsTable {
+      margin-top: 30px;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    #resultsTable th, #resultsTable td {
+      border: 1px solid #ccc;
+      padding: 8px;
+    }
+    #resultsTable th {
+      background-color: #eee;
+    }
+    .top-bar {
+      /*display: flex;*/
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="startScreen">
+    <h2>Введите имя, чтобы начать</h2>
+    <input type="text" id="nameInput" placeholder="Ваше имя" />
+    <button class="green" id="startBtn">✔️</button>
+  </div>
+
+  <div id="trainer">
+    <div class="top-bar">
+      <div id="counter"></div>
+      <button id="restart" class="icon-button" title="Перезапустить">🔁</button>
+    </div>
+    <div id="question"></div>
+    <div>
+      <input type="number" id="answerInput" />
+      <button class="icon-button" id="nextBtn" title="Ответить">✔️</button>
+    </div>
+    <div id="result"></div>
+    <div id="timer"></div>
+  </div>
+
+  <div id="finalScreen">
+    <h2>Тренировка завершена!</h2>
+    <p id="summary"></p>
+    <h3>Лучшие результаты</h3>
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th>Имя</th>
+          <th>Дата</th>
+          <th>Правильно</th>
+          <th>Время (сек)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <br>
+    <button id="finalRestart" class="icon-button" title="Перезапустить">🔁</button>
+  </div>
+
+  <script>
+    // Время на выполнение одного задания (в секундах)
+    const TIME_LIMIT = 10;
+
+    const examples = [
+      [9, 2], [9, 3], [9, 4], [9, 5], [9, 6], [9, 7], [9, 8],
+      [9, 9], [8, 3], [8, 4], [8, 5], [8, 6], [8, 7], [8, 8],
+      [7, 4], [7, 5], [7, 6], [7, 7],
+      [6, 5], [6, 6]
+    ];
+
+    let currentIndex = 0, correctCount = 0, totalTime = 0;
+    let startTime, questionStart, shuffled = [], name = '', timerId;
+    let isLocked = false;
+
+    const startScreen = document.getElementById('startScreen');
+    const trainer = document.getElementById('trainer');
+    const finalScreen = document.getElementById('finalScreen');
+    const nameInput = document.getElementById('nameInput');
+    const startBtn = document.getElementById('startBtn');
+    const questionEl = document.getElementById('question');
+    const counterEl = document.getElementById('counter');
+    const answerInput = document.getElementById('answerInput');
+    const resultEl = document.getElementById('result');
+    const nextBtn = document.getElementById('nextBtn');
+    const restartBtn = document.getElementById('restart');
+    const finalRestartBtn = document.getElementById('finalRestart');
+    const timerEl = document.getElementById('timer');
+    const summaryEl = document.getElementById('summary');
+    const resultsTable = document.getElementById('resultsTable').querySelector('tbody');
+
+    startScreen.style.display = 'block';
+
+    startBtn.onclick = () => {
+      name = nameInput.value.trim();
+      if (name === '') return;
+      startScreen.style.display = 'none';
+      trainer.style.display = 'block';
+      startGame();
+    };
+
+    restartBtn.onclick = finalRestartBtn.onclick = () => location.reload();
+
+    nextBtn.onclick = () => checkAnswer();
+
+    answerInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') checkAnswer();
+    });
+
+    function shuffle(array) {
+      return array.sort(() => Math.random() - 0.5);
+    }
+
+    function startGame() {
+      shuffled = shuffle([...examples]);
+      currentIndex = 0;
+      correctCount = 0;
+      totalTime = 0;
+      startTime = Date.now();
+      showQuestion();
+    }
+
+    function showQuestion() {
+      if (currentIndex >= shuffled.length) return finish();
+      resultEl.textContent = '';
+      const [a, b] = shuffled[currentIndex];
+      counterEl.textContent = `Вопрос ${currentIndex + 1} / ${shuffled.length}`;
+      questionEl.textContent = `${a} + ${b} = ?`;
+      answerInput.value = '';
+      answerInput.focus();
+      questionStart = Date.now();
+      timerEl.textContent = TIME_LIMIT;
+      isLocked = false;
+
+      clearInterval(timerId);
+      timerId = setInterval(() => {
+        const remaining = TIME_LIMIT - Math.floor((Date.now() - questionStart) / 1000);
+        timerEl.textContent = remaining;
+        if (remaining <= 0) {
+          clearInterval(timerId);
+          checkAnswer(true);
+        }
+      }, 200);
+    }
+
+    function checkAnswer(timeout = false) {
+      if (isLocked) return;
+      isLocked = true;
+      clearInterval(timerId);
+      const [a, b] = shuffled[currentIndex];
+      const correct = a + b;
+      const userAns = parseInt(answerInput.value);
+      const duration = (Date.now() - questionStart) / 1000;
+      if (!timeout && userAns === correct) {
+        correctCount++;
+        resultEl.textContent = 'Правильно';
+        resultEl.style.color = 'green';
+      } else {
+        resultEl.textContent = `Неправильно. Ответ: ${correct}`;
+        resultEl.style.color = 'red';
+      }
+      totalTime += duration;
+      currentIndex++;
+      setTimeout(showQuestion, 800);
+    }
+
+    function finish() {
+      trainer.style.display = 'none';
+      finalScreen.style.display = 'block';
+      const total = Math.round((Date.now() - startTime) / 1000);
+      summaryEl.textContent = `${name}, вы ответили правильно на ${correctCount} из ${shuffled.length} за ${total} секунд.`;
+      const result = { name, correct: correctCount, time: total, date: new Date().toLocaleDateString() };
+
+      const saved = JSON.parse(localStorage.getItem('results') || '[]');
+      saved.push(result);
+      saved.sort((a, b) => b.correct - a.correct || a.time - b.time);
+      localStorage.setItem('results', JSON.stringify(saved));
+
+      resultsTable.innerHTML = '';
+      saved.slice(0, 10).forEach(r => {
+        const row = `<tr><td>${r.name}</td><td>${r.date}</td><td>${r.correct}</td><td>${r.time}</td></tr>`;
+        resultsTable.insertAdjacentHTML('beforeend', row);
+      });
+    }
+  </script>
+</body>
+</html>
